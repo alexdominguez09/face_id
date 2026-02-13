@@ -1,1 +1,189 @@
-["Python](https://img.shields.io/badge/Python-3.9%2B-blue)\n![License](https://img.shields.io/badge/License-MIT-green)\n![Platform](https://img.shields.io/badge/Platform-Linux-lightgrey)\n\nA high-accuracy real-time face recognition system for Linux that detects faces in crowds, assigns unique persistent IDs, and recognizes them across multiple video sessions.\n\n## Features\n\n- **Real-time Face Detection**: Detect multiple faces in crowded scenes using MTCNN\n- **High-Accuracy Recognition**: State-of-the-art ArcFace embeddings via InsightFace\n- **Persistent Face IDs**: Assign and maintain unique identifiers for each person\n- **GPU Acceleration**: CUDA support for NVIDIA GPUs\n- **Dual Interface**: Both CLI and web-based management\n- **Live Monitoring**: Real-time video streaming with face overlay\n- **Face Gallery**: Search and manage enrolled faces\n\n## Architecture\n\n```\n+-----------------------------+\n|      Web Interface          |\n|  (FastAPI + HTML/JS)        |\n+-------------+---------------+\n              |\n+-------------v---------------+\n|      CLI Interface          |\n|  (Command-line operations)  |\n+-------------+---------------+\n              |\n+-------------v---------------+\n|   Face Recognition Engine   |\n|  [Detector] -> [Recognizer] |\n|    (MTCNN)    (InsightFace) |\n+-------------+---------------+\n              |\n+-------------v---------------+\n|      Storage Layer          |\n|    (SQLite Database)        |\n+-----------------------------+\n```\n\n## Project Structure\n\n```\nface_id/\n\u251c\u2500\u2500 face_recognition/          # Core recognition engine\n\u2502   \u251c\u2500\u2500 __init__.py\n\u2502   \u251c\u2500\u2500 detector.py           # MTCNN face detection\n\u2502   \u251c\u2500\u2500 recognizer.py         # InsightFace recognition\n\u2502   \u251c\u2500\u2500 tracker.py            # Face tracking\n\u2502   \u251c\u2500\u2500 database.py           # SQLite operations\n\u2502   \u251c\u2500\u2500 utils.py              # Helper functions\n\u2502   \u2514\u2500\u2500 config.py             # Configuration\n\u251c\u2500\u2500 cli/                      # Command-line interface\n\u2502   \u251c\u2500\u2500 __init__.py\n\u2502   \u2514\u2500\u2500 main.py               # CLI commands\n\u251c\u2500\u2500 web/                      # Web interface\n\u2502   \u251c\u2500\u2500 __init__.py\n\u2502   \u251c\u2500\u2500 app.py                # FastAPI application\n\u2502   \u251c\u2500\u2500 routes/               # API endpoints\n\u2502   \u2502   \u251c\u2500\u2500 faces.py\n\u2502   \u2502   \u251c\u2500\u2500 video.py\n\u2502   \u2502   \u2514\u2500\u2500 api.py\n\u2502   \u2514\u2500\u2500 static/               # Frontend assets\n\u2502       \u251c\u2500\u2500 index.html\n\u2502       \u251c\u2500\u2500 styles.css\n\u2502       \u2514\u2500\u2500 app.js\n\u251c\u2500\u2500 models/                   # ML models\n\u251c\u2500\u2500 data/                     # Database and embeddings\n\u251c\u2500\u2500 tests/                    # Unit tests\n\u251c\u2500\u2500 requirements.txt          # Python dependencies\n\u251c\u2500\u2500 setup.py                  # Package setup\n\u2514\u2500\u2500 README.md                 # This file\n```\n\n## Quick Start\n\n### Prerequisites\n\n- Linux OS (Ubuntu 20.04+ recommended)\n- Python 3.9 or higher\n- NVIDIA GPU with CUDA 11.0+ (optional but recommended)\n- 8GB+ RAM\n\n### Installation\n\n```bash\n# Clone the repository\ngit clone https://github.com/alexdominguez09/face_id.git\ncd face_id\n\n# Create virtual environment\npython3 -m venv venv\nsource venv/bin/activate\n\n# Install dependencies\npip install -r requirements.txt\n\n# Download models (automated)\npython -m face_recognition.utils.download_models\n\n# Initialize database\npython -m face_recognition.database init\n```\n\n### Usage\n\n#### CLI Interface\n\n```bash\n# Start real-time face detection\npython -m cli.main start --camera 0\n\n# Add a face manually\npython -m cli.main add-face --name \"John Doe", "image path/to/photo.jpg\n\n# List all enrolled faces\npython -m cli.main list-faces\n\n# Process a video file\npython -m cli.main process-video --input video.mp4 --output result.mp4\n```\n\n#### Web Interface\n\n```bash\n# Start the web server\npython -m web.app\n\n# Open browser to http://localhost:8000\n```\n\n## Technology Stack\n\n- **Detection**: [MTCNN](https://github.com/ipazc/mtcnn)\n- **Recognition**: [InsightFace](https://github.com/deepinsight/insightface)\n- **Video Processing**: [OpenCV](https://opencv.org/)\n- **Web Framework**: [FastAPI](https://fastapi.tiangolo.com/)\n- **Database**: SQLite\n\n## Performance Targets\n\n- Detection Accuracy: >95% on clear faces\n- Recognition Accuracy: >98% on known faces\n- Processing Speed: 15-30 FPS (detection), 5-10 FPS (recognition)\n- Latency: <200ms for face identification\n\n## Security & Privacy\n\n- Face embeddings encrypted at rest\n- GDPR-compliant data handling\n- Secure web interface with authentication\n- Regular security updates\n\n## Development Roadmap\n\n- [x] Project structure and documentation\n- [ ] Phase 1: Core Engine implementation\n- [ ] Phase 2: Recognition Pipeline\n- [ ] Phase 3: CLI Interface\n- [ ] Phase 4: Web Interface\n- [ ] Phase 5: Optimization & Testing\n- [ ] Phase 6: Documentation & Deployment\n\n## Contributing\n\nContributions are welcome! Please:\n\n1. Fork the repository\n2. Create a feature branch\n3. Commit your changes\n4. Push to the branch\n5. Open a Pull Request\n\n## License\n\nThis project is licensed under the MIT License.\n\n## Acknowledgments\n\n- [InsightFace](https://github.com/deepinsight/insightface) team\n- [MTCNN](https://github.com/ipazc/mtcnn) authors\n- [OpenCV](https://opencv.org/) community\n\n---\n\n**Note**: This system is for educational and legitimate use only. Always comply with local privacy laws and regulations."]
+# Face ID - Real-time Face Recognition System
+
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Platform](https://img.shields.io/badge/Platform-Linux-lightgrey)
+
+A high-accuracy real-time face recognition system for Linux that detects faces in crowds, assigns unique persistent IDs, and recognizes them across multiple video sessions.
+
+## 🎯 Features
+
+- **Real-time Face Detection**: Detect multiple faces in crowded scenes using MTCNN
+- **High-Accuracy Recognition**: State-of-the-art ArcFace embeddings via InsightFace
+- **Persistent Face IDs**: Assign and maintain unique identifiers for each person
+- **GPU Acceleration**: CUDA support for NVIDIA GPUs
+- **Dual Interface**: Both CLI and web-based management
+- **Live Monitoring**: Real-time video streaming with face overlay
+- **Face Gallery**: Search and manage enrolled faces
+
+## 🏗️ Architecture
+
+```
++-----------------------------+
+|      Web Interface          |
+|  (FastAPI + HTML/JS)        |
++-------------+---------------+
+              |
++-------------v---------------+
+|      CLI Interface          |
+|  (Command-line operations)  |
++-------------+---------------+
+              |
++-------------v---------------+
+|   Face Recognition Engine   |
+|  [Detector] -> [Recognizer] |
+|    (MTCNN)    (InsightFace) |
++-------------+---------------+
+              |
++-------------v---------------+
+|      Storage Layer          |
+|    (SQLite Database)        |
++-----------------------------+
+```
+
+## 📁 Project Structure
+
+```
+face_id/
+├── face_recognition/          # Core recognition engine
+│   ├── __init__.py
+│   ├── detector.py           # MTCNN face detection
+│   ├── recognizer.py         # InsightFace recognition
+│   ├── tracker.py            # Face tracking
+│   ├── database.py           # SQLite operations
+│   ├── utils.py              # Helper functions
+│   └── config.py             # Configuration
+├── cli/                      # Command-line interface
+│   ├── __init__.py
+│   └── main.py               # CLI commands
+├── web/                      # Web interface
+│   ├── __init__.py
+│   ├── app.py                # FastAPI application
+│   ├── routes/               # API endpoints
+│   │   ├── faces.py
+│   │   ├── video.py
+│   │   └── api.py
+│   └── static/               # Frontend assets
+│       ├── index.html
+│       ├── styles.css
+│       └── app.js
+├── models/                   # ML models
+├── data/                     # Database and embeddings
+├── tests/                    # Unit tests
+├── requirements.txt          # Python dependencies
+├── setup.py                  # Package setup
+└── README.md                 # This file
+```
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Linux OS (Ubuntu 20.04+ recommended)
+- Python 3.9 or higher
+- NVIDIA GPU with CUDA 11.0+ (optional but recommended)
+- 8GB+ RAM
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/alexdominguez09/face_id.git
+cd face_id
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Download models (automated)
+python -m face_recognition.utils.download_models
+
+# Initialize database
+python -m face_recognition.database init
+```
+
+### Usage
+
+#### CLI Interface
+
+```bash
+# Start real-time face detection
+python -m cli.main start --camera 0
+
+# Add a face manually
+python -m cli.main add-face --name "John Doe" --image path/to/photo.jpg
+
+# List all enrolled faces
+python -m cli.main list-faces
+
+# Process a video file
+python -m cli.main process-video --input video.mp4 --output result.mp4
+```
+
+#### Web Interface
+
+```bash
+# Start the web server
+python -m web.app
+
+# Open browser to http://localhost:8000
+```
+
+## 🛠️ Technology Stack
+
+- **Detection**: [MTCNN](https://github.com/ipazc/mtcnn)
+- **Recognition**: [InsightFace](https://github.com/deepinsight/insightface)
+- **Video Processing**: [OpenCV](https://opencv.org/)
+- **Web Framework**: [FastAPI](https://fastapi.tiangolo.com/)
+- **Database**: SQLite
+
+## 📊 Performance Targets
+
+- Detection Accuracy: >95% on clear faces
+- Recognition Accuracy: >98% on known faces
+- Processing Speed: 15-30 FPS (detection), 5-10 FPS (recognition)
+- Latency: <200ms for face identification
+
+## 🔒 Security & Privacy
+
+- Face embeddings encrypted at rest
+- GDPR-compliant data handling
+- Secure web interface with authentication
+- Regular security updates
+
+## 📋 Development Roadmap
+
+- [x] Project structure and documentation
+- [ ] Phase 1: Core Engine implementation
+- [ ] Phase 2: Recognition Pipeline
+- [ ] Phase 3: CLI Interface
+- [ ] Phase 4: Web Interface
+- [ ] Phase 5: Optimization & Testing
+- [ ] Phase 6: Documentation & Deployment
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🙏 Acknowledgments
+
+- [InsightFace](https://github.com/deepinsight/insightface) team
+- [MTCNN](https://github.com/ipazc/mtcnn) authors
+- [OpenCV](https://opencv.org/) community
+
+---
+
+**Note**: This system is for educational and legitimate use only. Always comply with local privacy laws and regulations.
