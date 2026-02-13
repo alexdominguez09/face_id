@@ -33,7 +33,7 @@ class Config:
     MAX_FACES = 10  # Maximum faces to process per frame
     
     # GPU settings
-    USE_GPU = True
+    USE_GPU = False  # Set to True if CUDA is properly installed
     GPU_DEVICE = 0
     
     # Web settings

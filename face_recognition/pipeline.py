@@ -251,26 +251,38 @@ class RecognitionPipeline:
         if not self._initialized:
             self.initialize()
         
-        # Detect face in image
-        detections = self.detector.detect(image)
-        
-        if len(detections) == 0:
-            raise ValueError("No face detected in the provided image")
-        
-        if len(detections) > 1:
-            logger.warning(f"Multiple faces detected, using the first one")
-        
-        # Extract face
-        face_image = self.detector.extract_face(image, detections[0]['box'])
-        
-        if face_image is None:
-            raise ValueError("Failed to extract face from image")
-        
-        # Generate embedding
-        embedding = self.recognizer.encode(face_image)
-        
-        if embedding is None:
-            raise ValueError("Failed to generate face embedding")
+        # Use InsightFace directly for detection and encoding
+        # This is more reliable than using MTCNN + InsightFace separately
+        try:
+            # Ensure recognizer model is loaded
+            if not self.recognizer._initialized:
+                self.recognizer.load_model()
+            
+            # Convert BGR to RGB if needed (OpenCV loads as BGR)
+            if len(image.shape) == 3 and image.shape[2] == 3:
+                rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            else:
+                rgb_image = image
+            
+            # Use InsightFace to detect and encode in one step
+            faces = self.recognizer._model.get(rgb_image)
+            
+            if len(faces) == 0:
+                raise ValueError("No face detected in the provided image")
+            
+            if len(faces) > 1:
+                logger.warning(f"Multiple faces detected, using the first one")
+            
+            # Get embedding from the first face
+            face = faces[0]
+            embedding = face.embedding
+            
+            # Normalize embedding
+            embedding = embedding / np.linalg.norm(embedding)
+            
+        except Exception as e:
+            logger.error(f"Failed to detect/encode face: {e}")
+            raise ValueError(f"Failed to generate face embedding: {e}")
         
         # Add to database
         face_id = self.database.add_face(name, embedding, metadata)
