@@ -8,13 +8,16 @@ A high-accuracy real-time face recognition system for Linux that detects faces i
 
 ## 🎯 Features
 
-- **Real-time Face Detection**: Detect multiple faces in crowded scenes using MTCNN
-- **High-Accuracy Recognition**: State-of-the-art ArcFace embeddings via InsightFace
+- **Real-time Face Detection**: Detect multiple faces in crowded scenes using MTCNN/InsightFace
+- **High-Accuracy Recognition**: State-of-the-art ArcFace embeddings via InsightFace (512-dim)
 - **Persistent Face IDs**: Assign and maintain unique identifiers for each person
-- **GPU Acceleration**: CUDA support for NVIDIA GPUs
+- **GPU Acceleration**: CUDA support for NVIDIA GPUs with automatic CPU fallback
 - **Dual Interface**: Both CLI and web-based management
-- **Live Monitoring**: Real-time video streaming with face overlay
+- **Live Monitoring**: Real-time video streaming with face overlay and bounding boxes
 - **Face Gallery**: Search and manage enrolled faces
+- **Face Deduplication**: Automatic detection of duplicate faces during enrollment
+- **Batch Enrollment**: Process multiple face images with visualization output
+- **Multiple Video Sources**: Camera, video files, RTSP/HTTP streams
 
 ## 🏗️ Architecture
 
@@ -134,11 +137,58 @@ python -m web.app
 
 ## 🛠️ Technology Stack
 
-- **Detection**: [MTCNN](https://github.com/ipazc/mtcnn)
-- **Recognition**: [InsightFace](https://github.com/deepinsight/insightface)
+- **Detection**: [MTCNN](https://github.com/ipazc/mtcnn) + [InsightFace](https://github.com/deepinsight/insightface)
+- **Recognition**: [InsightFace](https://github.com/deepinsight/insightface) (ArcFace 512-dim embeddings)
 - **Video Processing**: [OpenCV](https://opencv.org/)
 - **Web Framework**: [FastAPI](https://fastapi.tiangolo.com/)
 - **Database**: SQLite
+
+## 📝 Modifications & Updates
+
+### 2026-02-17 - Latest Updates
+
+#### Core Engine Improvements
+- **Lowered MIN_FACE_SIZE to 40**: Optimized for video surveillance with small faces (previously 80)
+- **GPU Memory Fallback**: Automatic CPU fallback when GPU memory is exhausted
+- **Detection Confidence**: Lowered to 0.8 for better detection on challenging images
+- **Face Deduplication**: Added DUPLICATE_THRESHOLD (0.85) to prevent duplicate enrollments
+
+#### CLI Enhancements
+- **Multiple Video Sources**: Support for camera index, video files, and RTSP/HTTP streams
+- **Camera Listing**: `--list-cameras` flag to discover available video devices
+- **Headless Mode**: `--no-display` for server/headless environments
+- **Batch Enrollment**: Process multiple images with stats tracking (detected, enrolled, skipped, failed)
+- **Visualization Output**: Save images with bounding boxes (green=known, red=unknown)
+- **FPS Counter**: Optional `--show-fps` for performance monitoring
+
+#### Web Interface
+- **JSON Enrollment**: Added `/faces/enroll` endpoint accepting JSON with base64 images
+- **File Upload**: `/faces/enroll/file` endpoint for multipart file uploads
+- **Duplicate Detection**: Automatic duplicate checking during enrollment
+- **Full CRUD**: List, search, view, delete face operations
+- **Recognition API**: `/faces/recognize` endpoint for face identification
+
+### CLI Usage Examples
+
+```bash
+# Start with camera
+python -m cli.main start --source 0
+
+# List available cameras
+python -m cli.main start --list-cameras
+
+# Process video file
+python -m cli.main start --source /path/to/video.mp4
+
+# Process RTSP stream
+python -m cli.main start --source rtsp://camera-ip:554/stream
+
+# Batch enroll with visualization
+python -m cli.main batch-enroll --directory ./photos --output ./results
+
+# Add single face
+python -m cli.main add-face --name "John Doe" --image path/to/photo.jpg
+```
 
 ## 📊 Performance Targets
 

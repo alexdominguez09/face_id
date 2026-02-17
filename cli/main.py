@@ -231,7 +231,7 @@ def list_available_cameras():
 
 @click.command()
 @click.option('--name', required=True, help='Person name')
-@click.option('--image', required=True, type=click.Path(), help='Image file path')
+@click.option('--image', required=True, type=click.Path(exists=True), help='Image file path')
 @click.option('--metadata', type=str, help='Additional metadata (JSON format)')
 def add_face(name, image, metadata):
     """
@@ -256,14 +256,17 @@ def add_face(name, image, metadata):
         config = Config()
         pipeline = RecognitionPipeline(config=config)
         
+        # Store original image path
+        image_path = image
+        
         # First, detect faces in the image
         import cv2
-        image = cv2.imread(image)
-        if image is None:
+        image_array = cv2.imread(image_path)
+        if image_array is None:
             click.echo(f"\n❌ Error: Could not read image file")
             return
             
-        results = pipeline.process_frame(image, recognize=False)
+        results = pipeline.process_frame(image_array, recognize=False)
         detections = results.get('detections', [])
         
         click.echo(f"   Faces detected: {len(detections)}")
@@ -272,8 +275,8 @@ def add_face(name, image, metadata):
             click.echo(f"\n⚠️  No face detected in the image!")
             return
         
-        # Add face
-        face_id = pipeline.add_known_face_from_file(name, image, metadata=metadata)
+        # Add face using original path
+        face_id = pipeline.add_known_face_from_file(name, image_path, metadata=metadata)
         
         click.echo(f"\n✅ Face enrolled successfully!")
         click.echo(f"   Face ID: {face_id}")
