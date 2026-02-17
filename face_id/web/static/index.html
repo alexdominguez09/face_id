@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition System</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👤</text></svg>">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>Face Recognition System</h1>
+                <div class="header-status">
+                    <span id="systemStatus" class="status-indicator status-checking">Checking...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <nav class="nav-menu">
+                    <button class="nav-btn active" data-view="dashboard">
+                        <span class="nav-icon">📊</span> Dashboard
+                    </button>
+                    <button class="nav-btn" data-view="faces">
+                        <span class="nav-icon">👥</span> Faces
+                    </button>
+                    <button class="nav-btn" data-view="enroll">
+                        <span class="nav-icon">➕</span> Enroll Face
+                    </button>
+                    <button class="nav-btn" data-view="video">
+                        <span class="nav-icon">🎥</span> Video
+                    </button>
+                    <button class="nav-btn" data-view="settings">
+                        <span class="nav-icon">⚙️</span> Settings
+                    </button>
+                </nav>
+            </aside>
+
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Dashboard View -->
+                <section id="dashboard-view" class="view active">
+                    <h2>Dashboard</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">👥</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="totalFaces">-</span>
+                                <span class="stat-label">Total Faces</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">🎯</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="detectionsToday">-</span>
+                                <span class="stat-label">Detections Today</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">⏱️</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="avgProcessingTime">-</span>
+                                <span class="stat-label">Avg Processing (ms)</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">🔄</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="systemUptime">-</span>
+                                <span class="stat-label">Uptime</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="recent-activity">
+                        <h3>Recent Activity</h3>
+                        <div id="activityList" class="activity-list">
+                            <p class="empty-state">No recent activity</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Faces View -->
+                <section id="faces-view" class="view">
+                    <div class="view-header">
+                        <h2>Face Gallery</h2>
+                        <div class="view-actions">
+                            <input type="text" id="searchFaces" class="search-input" placeholder="Search faces...">
+                            <button class="btn btn-primary" onclick="refreshFaces()">Refresh</button>
+                        </div>
+                    </div>
+                    <div id="facesGrid" class="faces-grid">
+                        <p class="empty-state">Loading faces...</p>
+                    </div>
+                </section>
+
+                <!-- Enroll Face View -->
+                <section id="enroll-view" class="view">
+                    <h2>Enroll New Face</h2>
+                    <form id="enrollForm" class="enroll-form">
+                        <div class="form-group">
+                            <label for="personName">Person Name</label>
+                            <input type="text" id="personName" name="name" required 
+                                   placeholder="Enter person's name" autocomplete="off">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Face Image</label>
+                            <div class="image-upload-area" id="imageUploadArea">
+                                <input type="file" id="faceImage" name="image" accept="image/*" required>
+                                <div class="upload-placeholder">
+                                    <span class="upload-icon">📷</span>
+                                    <span>Click or drag image here</span>
+                                    <span class="upload-hint">Supports JPG, PNG, BMP</span>
+                                </div>
+                                <img id="previewImage" class="preview-image" alt="Preview">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="metadata">Additional Notes (Optional)</label>
+                            <textarea id="metadata" name="metadata" rows="3" 
+                                      placeholder="Any additional information..."></textarea>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" onclick="clearEnrollForm()">Clear</button>
+                            <button type="submit" class="btn btn-primary" id="enrollBtn">Enroll Face</button>
+                        </div>
+                        
+                        <div id="enrollResult" class="result-message"></div>
+                    </form>
+                </section>
+
+                <!-- Video View -->
+                <section id="video-view" class="view">
+                    <h2>Video Processing</h2>
+                    <div class="video-controls">
+                        <div class="form-group">
+                            <label for="videoSource">Video Source</label>
+                            <select id="videoSource" name="source">
+                                <option value="camera">Webcam (Camera 0)</option>
+                                <option value="file">Video File</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" id="videoFileGroup" style="display: none;">
+                            <label for="videoFile">Select Video File</label>
+                            <input type="file" id="videoFile" accept="video/*">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enableRecognition" checked>
+                                Enable Face Recognition
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="saveOutput" checked>
+                                Save Output Video
+                            </label>
+                        </div>
+                        
+                        <div class="video-actions">
+                            <button class="btn btn-primary" id="startVideoBtn" onclick="startVideo()">
+                                Start Processing
+                            </button>
+                            <button class="btn btn-danger" id="stopVideoBtn" onclick="stopVideo()" disabled>
+                                Stop
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="video-container">
+                        <video id="videoElement" autoplay muted></video>
+                        <canvas id="overlayCanvas"></canvas>
+                        <div id="videoStatus" class="video-status">Camera not started</div>
+                    </div>
+                    
+                    <div class="video-stats">
+                        <div class="stat">
+                            <span class="stat-label">FPS:</span>
+                            <span id="videoFps" class="stat-value">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Faces Detected:</span>
+                            <span id="facesDetected" class="stat-value">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Recognized:</span>
+                            <span id="facesRecognized" class="stat-value">0</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Settings View -->
+                <section id="settings-view" class="view">
+                    <h2>Settings</h2>
+                    <div class="settings-section">
+                        <h3>Recognition Settings</h3>
+                        <div class="setting-item">
+                            <label for="recognitionThreshold">Recognition Threshold</label>
+                            <input type="range" id="recognitionThreshold" min="0.3" max="0.9" step="0.05" value="0.5">
+                            <span id="recognitionThresholdValue">0.50</span>
+                        </div>
+                        <div class="setting-item">
+                            <label for="duplicateThreshold">Duplicate Detection Threshold</label>
+                            <input type="range" id="duplicateThreshold" min="0.5" max="0.99" step="0.01" value="0.85">
+                            <span id="duplicateThresholdValue">0.85</span>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <h3>Database</h3>
+                        <div class="setting-item">
+                            <span>Total Faces:</span>
+                            <span id="dbFaceCount">-</span>
+                        </div>
+                        <div class="setting-actions">
+                            <button class="btn btn-warning" onclick="exportDatabase()">Export Database</button>
+                            <button class="btn btn-danger" onclick="clearDatabase()">Clear All Faces</button>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <h3>About</h3>
+                        <p>Face Recognition System v0.1.0</p>
+                        <p>Powered by MTCNN + InsightFace (ArcFace)</p>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 Face Recognition System. For educational use only.</p>
+        </footer>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <h3>Confirm Delete</h3>
+            <p id="deleteMessage">Are you sure you want to delete this face?</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
