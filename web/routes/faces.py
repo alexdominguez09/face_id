@@ -393,3 +393,86 @@ async def recognize_face(image: str = Form(...)):
     except Exception as e:
         logger.error(f"Error recognizing face: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/search")
+async def search_face(request: Request, threshold: float = 0.5, limit: int = 10):
+    """
+    Search for a face in the database using an image.
+    
+    Compares the detected face in the input image against all enrolled faces
+    using InsightFace embeddings and cosine similarity.
+    
+    Args:
+        threshold: Minimum similarity threshold (default 0.5)
+        limit: Maximum number of results to return (default 10)
+    """
+    try:
+        body = await request.json()
+        image = body.get('image')
+        
+        if not image:
+            raise HTTPException(status_code=400, detail="Image is required")
+        
+        # Decode base64 image
+        if "," in image:
+            image = image.split(",")[1]
+        
+        image_bytes = base64.b64decode(image)
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        image_array = np.array(img)
+        
+        # Get pipeline
+        pipeline = get_pipeline()
+        
+        # Ensure recognizer model is loaded
+        if not pipeline.recognizer._initialized:
+            pipeline.recognizer.load_model()
+        
+        # Use InsightFace directly to detect and encode (same as add_known_face)
+        import cv2
+        rgb_image = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
+        faces = pipeline.recognizer._model.get(rgb_image)
+        
+        if not faces:
+            raise HTTPException(status_code=400, detail="No face detected in image")
+        
+        if len(faces) > 1:
+            raise HTTPException(status_code=400, detail="Multiple faces detected. Please provide an image with a single face")
+        
+        # Get embedding
+        face = faces[0]
+        embedding = face.embedding
+        
+        # Normalize embedding
+        embedding = embedding / np.linalg.norm(embedding)
+        
+        # Search database for similar faces
+        matches = pipeline.database.find_similar_faces(embedding, threshold=threshold, limit=limit)
+        
+        return {
+            "matches": [
+                {
+                    "id": face["id"],
+                    "name": face["name"],
+                    "similarity": face.get("similarity", 0),
+                    "created_at": face.get("created_at"),
+                    "last_seen_at": face.get("last_seen_at"),
+                    "seen_count": face.get("seen_count", 0)
+                }
+                for face in matches
+            ],
+            "total_matches": len(matches),
+            "best_match": {
+                "id": matches[0]["id"],
+                "name": matches[0]["name"],
+                "similarity": matches[0].get("similarity", 0)
+            } if matches else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error searching face: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))

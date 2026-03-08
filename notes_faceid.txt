@@ -3,7 +3,7 @@ Face id
 
 To run app
 
-cd /home/alex/Downloads/face_id/face_id
+cd /home/alex/apli/face_id
 conda activate faceid
 
 # List all enrolled faces                                                                    
@@ -31,4 +31,9 @@ conda activate faceid
      python -m cli.main batch-enroll --directory /home/alex/Downloads/people/train/images                               
                                                                                                   
      # Import faces from another database                                                         
-     python -m cli.main import-faces --source other.db      
+     python -m cli.main import-faces --source other.db     
+     
+     
+       Session   Face identification and recognition
+  Continue  opencode -s ses_3a894207cffeW4XtSd1OPEhssC
+ 

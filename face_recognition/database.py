@@ -401,6 +401,42 @@ class FaceDatabase:
         
         return cursor.lastrowid
     
+    def find_similar_faces(self, embedding: np.ndarray, threshold: float = 0.5, limit: int = 10) -> List[Dict]:
+        """
+        Find similar faces in the database by comparing embeddings.
+
+        Args:
+            embedding: Face embedding vector to search for
+            threshold: Minimum similarity threshold (default 0.5)
+            limit: Maximum number of results to return
+
+        Returns:
+            List of face data dicts with similarity score, sorted by similarity (highest first)
+        """
+        self.connect()
+
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM faces')
+
+        matches = []
+
+        for row in cursor.fetchall():
+            face_data = self._row_to_dict(row)
+            stored_embedding = face_data['embedding']
+
+            # Calculate cosine similarity
+            similarity = self._cosine_similarity(embedding, stored_embedding)
+
+            if similarity >= threshold:
+                face_data['similarity'] = similarity
+                matches.append(face_data)
+
+        # Sort by similarity (highest first)
+        matches.sort(key=lambda x: x['similarity'], reverse=True)
+
+        # Limit results
+        return matches[:limit]
+    
     def _row_to_dict(self, row: sqlite3.Row) -> Dict:
         """Convert database row to dictionary with embedding as numpy array."""
         data = dict(row)

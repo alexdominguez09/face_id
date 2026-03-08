@@ -578,6 +578,100 @@ def search(query, name, face_id):
 
 
 @click.command()
+@click.option('--image', '-i', required=True, type=click.Path(exists=True), help='Image file path to search for')
+@click.option('--threshold', '-t', type=float, default=0.5, help='Similarity threshold (0.0-1.0, default 0.5)')
+@click.option('--limit', '-l', type=int, default=10, help='Maximum number of results to return')
+def search_face(image, threshold, limit):
+    """
+    Search for a face in the database using an image.
+    
+    Compares the detected face in the input image against all enrolled faces
+    using InsightFace embeddings and cosine similarity.
+    
+    Args:
+        image: Image file path containing a face to search for
+        threshold: Minimum similarity threshold (default 0.5)
+        limit: Maximum number of results to return
+    """
+    click.echo("="*60)
+    click.echo("🔍 SEARCH FACE BY IMAGE")
+    click.echo("="*60)
+    click.echo(f"Image: {image}")
+    click.echo(f"Threshold: {threshold}")
+    click.echo(f"Limit: {limit}")
+    click.echo("")
+    
+    try:
+        # Initialize pipeline
+        config = Config()
+        pipeline = RecognitionPipeline(config=config)
+        
+        # Read image
+        import cv2
+        image_array = cv2.imread(image)
+        if image_array is None:
+            click.echo(f"\n❌ Error: Could not read image file")
+            return
+        
+        # Ensure recognizer model is loaded
+        if not pipeline.recognizer._initialized:
+            pipeline.recognizer.load_model()
+        
+        # Convert BGR to RGB
+        rgb_image = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
+        
+        # Use InsightFace directly to detect and encode (same as add_known_face)
+        faces = pipeline.recognizer._model.get(rgb_image)
+        
+        if len(faces) == 0:
+            click.echo(f"\n⚠️  No face detected in the image!")
+            return
+        
+        if len(faces) > 1:
+            click.echo(f"\n⚠️  Multiple faces detected ({len(faces)}). Using the first one.")
+        
+        # Get embedding
+        face = faces[0]
+        embedding = face.embedding
+        
+        # Normalize embedding
+        import numpy as np
+        embedding = embedding / np.linalg.norm(embedding)
+        
+        click.echo(f"Face detected and encoded successfully")
+        click.echo(f"Searching database...")
+        click.echo("")
+        
+        # Search database for similar faces
+        matches = pipeline.database.find_similar_faces(embedding, threshold=threshold, limit=limit)
+        
+        if not matches:
+            click.echo(f"No matching faces found (threshold: {threshold})")
+            return
+        
+        # Display results
+        click.echo(f"Found {len(matches)} matching face(s):")
+        click.echo("-" * 80)
+        click.echo(f"{'ID':<6} {'Name':<30} {'Similarity':<12}")
+        click.echo("-" * 80)
+        
+        for face in matches:
+            similarity = face.get('similarity', 0)
+            click.echo(
+                f"{face['id']:<6} "
+                f"{face['name']:<30} "
+                f"{similarity:.3f}"
+            )
+        
+        click.echo("-" * 80)
+        click.echo(f"\nBest match: {matches[0]['name']} (ID: {matches[0]['id']}, similarity: {matches[0].get('similarity', 0):.3f})")
+        
+    except Exception as e:
+        click.echo(f"\n❌ Error: {str(e)}", err=True)
+        raise
+
+
+@click.command()
 @click.option('--directory', type=click.Path(), required=True, help='Directory containing face images')
 @click.option('--batch-size', type=int, default=10, help='Number of faces to process in batch')
 @click.option('--output', '-o', type=click.Path(), help='Directory to save visualized images with bounding boxes')
@@ -937,6 +1031,7 @@ def main():
     cli.add_command(process_video)
     cli.add_command(export_faces)
     cli.add_command(search)
+    cli.add_command(search_face)
     cli.add_command(batch_enroll)
     cli.add_command(import_faces)
     cli.add_command(config)
