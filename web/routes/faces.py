@@ -29,7 +29,8 @@ def get_database() -> FaceDatabase:
     """Get database instance."""
     global _db
     if _db is None:
-        _db = FaceDatabase()
+        from face_recognition.config import Config
+        _db = FaceDatabase(db_path=str(Config.DB_PATH))
     return _db
 
 
@@ -59,7 +60,7 @@ async def list_faces(limit: int = 100, offset: int = 0):
                     "updated_at": face.get("updated_at"),
                     "last_seen_at": face.get("last_seen_at"),
                     "seen_count": face.get("seen_count", 0),
-                    "has_image": face.get("metadata", {}).get("image_path") is not None
+                    "has_image": (face.get("metadata") or {}).get("image_path") is not None
                 }
                 for face in faces
             ],

@@ -40,7 +40,7 @@ async def get_stats():
     Get system statistics.
     """
     try:
-        db = FaceDatabase()
+        db = FaceDatabase(db_path=str(Config.DB_PATH))
         total_faces = db.get_face_count()
         
         # Get today's detections
@@ -81,7 +81,7 @@ async def get_settings():
     Get system settings.
     """
     try:
-        db = FaceDatabase()
+        db = FaceDatabase(db_path=str(Config.DB_PATH))
         
         return {
             "total_faces": db.get_face_count(),
@@ -122,7 +122,7 @@ async def export_database():
     Export the face database as JSON.
     """
     try:
-        db = FaceDatabase()
+        db = FaceDatabase(db_path=str(Config.DB_PATH))
         faces = db.list_faces(limit=10000)
         
         export_data = {
