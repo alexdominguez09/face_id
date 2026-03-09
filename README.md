@@ -23,6 +23,8 @@ A high-accuracy real-time face recognition system for Linux that detects faces i
 - **Video Processing**: Process video files with optional output and frame skipping
 - **Camera Auto-detection**: Automatic discovery of available cameras with fallback methods
 
+![Video Processing Example](video_process.jpg)
+
 ## 🏗️ Architecture
 
 ```
@@ -181,6 +183,8 @@ face-id cleanup
 ```
 
 ### Web Interface
+
+![Web Interface](web_gui.jpg)
 
 ```bash
 # Start the web server
