@@ -162,7 +162,8 @@ class FaceDetector:
         return float(quality)
     
     def extract_face(self, image: np.ndarray, bbox: List[int], 
-                     target_size: Tuple[int, int] = (112, 112)) -> Optional[np.ndarray]:
+                      target_size: Tuple[int, int] = (112, 112),
+                      padding_percent: float = 0.0) -> Optional[np.ndarray]:
         """
         Extract and resize face from image.
         
@@ -170,11 +171,21 @@ class FaceDetector:
             image: Input image
             bbox: Bounding box [x, y, width, height]
             target_size: Target size for extracted face (width, height)
+            padding_percent: Percentage padding around bounding box (0.0-1.0)
             
         Returns:
             Extracted and resized face image, or None if extraction fails
         """
         x, y, width, height = bbox
+        
+        # Apply padding if requested
+        if padding_percent > 0:
+            pad_x = int(width * padding_percent)
+            pad_y = int(height * padding_percent)
+            x = max(0, x - pad_x)
+            y = max(0, y - pad_y)
+            width = min(image.shape[1] - x, width + 2 * pad_x)
+            height = min(image.shape[0] - y, height + 2 * pad_y)
         
         # Ensure coordinates are within image bounds
         h, w = image.shape[:2]
@@ -215,24 +226,36 @@ class FaceDetector:
             # Calculate angle between eyes
             dY = right_eye[1] - left_eye[1]
             dX = right_eye[0] - left_eye[0]
-            angle = np.degrees(np.arctan2(dY, dX)) - 180
+            angle = np.degrees(np.arctan2(dY, dX))
             
-            # Calculate center point between eyes
-            eyes_center = ((left_eye[0] + right_eye[0]) // 2,
-                          (left_eye[1] + right_eye[1]) // 2)
+            # Calculate center between eyes
+            eyes_center_x = (left_eye[0] + right_eye[0]) // 2
+            eyes_center_y = (left_eye[1] + right_eye[1]) // 2
+            eyes_center = (eyes_center_x, eyes_center_y)
             
             # Get rotation matrix
             M = cv2.getRotationMatrix2D(eyes_center, angle, 1.0)
             
-            # Rotate image
+            # Rotate the entire image
             h, w = image.shape[:2]
             rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC)
             
-            # Extract and resize face
-            # For now, just resize the whole rotated image
-            aligned = cv2.resize(rotated, target_size, interpolation=cv2.INTER_LINEAR)
+            # After rotation, extract the face region using the original bounding box
+            # For simplicity, just extract from center of rotated image
+            center_x, center_y = w // 2, h // 2
+            crop_size = min(w, h) // 3  # Extract a region around center
             
-            return aligned
+            x1 = max(0, center_x - crop_size)
+            x2 = min(w, center_x + crop_size)
+            y1 = max(0, center_y - crop_size)
+            y2 = min(h, center_y + crop_size)
+            
+            if x2 > x1 and y2 > y1:
+                face_region = rotated[y1:y2, x1:x2]
+                aligned = cv2.resize(face_region, target_size, interpolation=cv2.INTER_LINEAR)
+                return aligned
+            
+            return None
         except Exception as e:
             logger.warning(f"Face alignment failed: {e}")
             return None

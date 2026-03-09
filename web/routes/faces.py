@@ -43,13 +43,21 @@ def get_pipeline() -> RecognitionPipeline:
 
 
 @router.get("")
-async def list_faces(limit: int = 100, offset: int = 0):
+async def list_faces(page: int = 1, limit: int = 20):
     """
-    List all enrolled faces.
+    List enrolled faces with pagination.
+    
+    Args:
+        page: Page number (1-indexed)
+        limit: Number of faces per page (default: 20)
     """
     try:
         db = get_database()
+        offset = (page - 1) * limit
+        
         faces = db.list_faces(limit=limit, offset=offset)
+        total_faces = db.get_face_count()
+        total_pages = (total_faces + limit - 1) // limit  # Ceiling division
         
         return {
             "faces": [
@@ -60,13 +68,20 @@ async def list_faces(limit: int = 100, offset: int = 0):
                     "updated_at": face.get("updated_at"),
                     "last_seen_at": face.get("last_seen_at"),
                     "seen_count": face.get("seen_count", 0),
-                    "has_image": (face.get("metadata") or {}).get("image_path") is not None
+                    "has_image": bool(face.get("metadata") and (face["metadata"].get("image_path") or face["metadata"].get("image_data")))
                 }
                 for face in faces
             ],
-            "total": db.get_face_count(),
-            "limit": limit,
-            "offset": offset
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total_faces": total_faces,
+                "total_pages": total_pages,
+                "has_prev": page > 1,
+                "has_next": page < total_pages,
+                "prev_page": page - 1 if page > 1 else None,
+                "next_page": page + 1 if page < total_pages else None
+            }
         }
     except Exception as e:
         logger.error(f"Error listing faces: {e}")
@@ -93,7 +108,8 @@ async def get_face(face_id: int):
             "updated_at": face.get("updated_at"),
             "last_seen_at": face.get("last_seen_at"),
             "seen_count": face.get("seen_count", 0),
-            "metadata": face.get("metadata", {})
+            "metadata": face.get("metadata", {}),
+            "has_image": bool(face.get("metadata") and (face["metadata"].get("image_path") or face["metadata"].get("image_data")))
         }
     except HTTPException:
         raise
@@ -166,42 +182,56 @@ async def enroll_face(request: Request):
         db = get_database()
         pipeline = get_pipeline()
         
-        # Detect and encode face
-        detections = pipeline.detector.detect(image_array)
-        
-        if not detections:
-            raise HTTPException(status_code=400, detail="No face detected in image")
-        
-        if len(detections) > 1:
-            raise HTTPException(status_code=400, detail="Multiple faces detected. Please provide an image with a single face")
-        
-        # Get face embedding - extract face then encode
-        face_image = pipeline.detector.extract_face(image_array, detections[0]['box'])
-        if face_image is None:
-            raise HTTPException(status_code=400, detail="Could not extract face from image")
-        
-        embedding = pipeline.recognizer.encode(face_image)
-        if embedding is None:
-            raise HTTPException(status_code=400, detail="Could not encode face")
-        
-        # Check for duplicates
-        existing = db.face_exists(embedding, threshold=0.85)
-        if existing:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Face already exists: {existing['name']} (ID: {existing['id']}, similarity: high)"
-            )
-        
-        # Add face to database
-        import json
-        meta = json.loads(metadata) if metadata else {}
-        meta["image_data"] = image  # Store base64 image
-        
-        face_id = db.add_face(
-            name=name,
-            embedding=embedding,
-            metadata=meta
-        )
+        # Use pipeline's add_known_face method which handles detection and encoding
+        # This is more robust than doing detection and encoding separately
+        try:
+            # Add face to database using pipeline
+            import json
+            # Handle metadata - it could be a dict or a JSON string
+            if metadata is None:
+                meta = {}
+            elif isinstance(metadata, dict):
+                meta = metadata
+            else:
+                # Try to parse as JSON string
+                try:
+                    meta = json.loads(metadata)
+                except json.JSONDecodeError:
+                    # If it's not valid JSON, treat it as a string value
+                    meta = {"notes": str(metadata)}
+            
+            # The pipeline's add_known_face method will:
+            # 1. Detect face using MTCNN
+            # 2. Encode face using InsightFace
+            # 3. Check for duplicates
+            # 4. Store image in metadata
+            face_id = pipeline.add_known_face(name, image_array, meta)
+            
+        except ValueError as e:
+            # Handle specific error messages from pipeline
+            error_msg = str(e)
+            if "No face detected" in error_msg:
+                raise HTTPException(status_code=400, detail="No face detected in image")
+            elif "Multiple faces detected" in error_msg:
+                raise HTTPException(status_code=400, detail="Multiple faces detected. Please provide an image with a single face")
+            elif "Face already exists" in error_msg:
+                # Extract the existing face info from error message
+                raise HTTPException(
+                    status_code=409,
+                    detail=error_msg
+                )
+            elif "Failed to generate face embedding" in error_msg or "Could not encode face" in error_msg:
+                # Check if it's a GPU memory issue
+                if "CUBLAS_STATUS_ALLOC_FAILED" in error_msg or "GPU" in error_msg:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="GPU memory error. Please try again or use a different image."
+                    )
+                else:
+                    raise HTTPException(status_code=400, detail="Could not encode face. Please ensure the image contains a clear face.")
+            else:
+                # Generic error
+                raise HTTPException(status_code=400, detail=f"Failed to enroll face: {error_msg}")
         
         logger.info(f"Enrolled face: {name} (ID: {face_id})")
         
@@ -459,7 +489,8 @@ async def search_face(request: Request, threshold: float = 0.5, limit: int = 10)
                     "similarity": face.get("similarity", 0),
                     "created_at": face.get("created_at"),
                     "last_seen_at": face.get("last_seen_at"),
-                    "seen_count": face.get("seen_count", 0)
+                    "seen_count": face.get("seen_count", 0),
+                    "has_image": bool(face.get("metadata") and (face["metadata"].get("image_path") or face["metadata"].get("image_data")))
                 }
                 for face in matches
             ],

@@ -28,6 +28,7 @@ class Track:
         self.age = 0  # Frames since last update
         self.total_hits = 1
         self.hit_streak = 1
+        self.last_recognition = None  # Store last recognition result
     
     def update(self, bbox: List[int], confidence: float) -> None:
         """
@@ -47,6 +48,15 @@ class Track:
         """Mark track as missed in current frame."""
         self.age += 1
         self.hit_streak = 0
+    
+    def update_recognition(self, recognition_result: Dict) -> None:
+        """
+        Update track with recognition result.
+        
+        Args:
+            recognition_result: Dict with 'name', 'similarity', 'face_id', 'is_known'
+        """
+        self.last_recognition = recognition_result
     
     def is_confirmed(self) -> bool:
         """Check if track is confirmed (has enough hits)."""
@@ -239,7 +249,7 @@ class FaceTracker:
         for track_id, track in self.tracks.items():
             # Only return confirmed tracks or tracks with recent hits
             if track.is_confirmed() or track.hit_streak > 0:
-                active_tracks.append({
+                track_dict = {
                     'track_id': track.track_id,
                     'box': track.bbox,
                     'confidence': track.confidence,
@@ -247,9 +257,26 @@ class FaceTracker:
                     'hits': track.total_hits,
                     'hit_streak': track.hit_streak,
                     'confirmed': track.is_confirmed()
-                })
+                }
+                
+                # Include last recognition result if available
+                if track.last_recognition:
+                    track_dict['last_recognition'] = track.last_recognition
+                
+                active_tracks.append(track_dict)
         
         return active_tracks
+    
+    def update_track_recognition(self, track_id: int, recognition_result: Dict) -> None:
+        """
+        Update recognition result for a track.
+        
+        Args:
+            track_id: Track ID to update
+            recognition_result: Recognition result dict
+        """
+        if track_id in self.tracks:
+            self.tracks[track_id].update_recognition(recognition_result)
     
     @staticmethod
     def _calculate_iou(box1: List[int], box2: List[int]) -> float:

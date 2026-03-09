@@ -37,6 +37,12 @@ ENV/
 data/
 models/*.onnx
 models/*.pth
+faces/
+faces_to_enroll/
+archive/
+backups/
+detected_faces/
+test_output/
 
 # Logs
 *.log

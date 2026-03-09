@@ -33,6 +33,25 @@ class Config:
     RECOGNITION_INTERVAL = 5  # Recognize every N frames
     MAX_FACES = 10  # Maximum faces to process per frame
     
+    # Face extraction settings
+    FACE_EXTRACTION_PADDING = 0.0  # Percentage padding around bounding box (0.0-1.0)
+    USE_FACE_ALIGNMENT = False  # Use eye-based face alignment when landmarks available
+    USE_INSIGHTFACE_DETECTION = False  # Use InsightFace for detection instead of MTCNN (more accurate but slower)
+    
+    # Visualization settings
+    SHOW_SIMILARITY_BARS = True  # Show similarity bars above bounding boxes
+    SHOW_CONFIDENCE_SCORES = True  # Show confidence scores in labels
+    
+    # Logging settings
+    ENABLE_CSV_LOGGING = True  # Enable CSV logging of recognition events
+    CSV_LOG_MAX_SIZE_MB = 10  # Maximum CSV file size before rotation
+    CSV_LOG_ROTATE = True  # Rotate log files when they get too large
+    
+    # Video output settings
+    VIDEO_CODEC = 'mp4v'  # Codec for output videos: 'h264', 'h265', 'mp4v', 'xvid', 'avc1'
+    VIDEO_QUALITY = 95  # Video quality (0-100, higher is better)
+    VIDEO_CONTAINER = 'mp4'  # Container format: 'mp4', 'avi', 'mkv'
+    
     # GPU settings
     USE_GPU = True  # Set to True if CUDA is properly installed
     GPU_DEVICE = 0
