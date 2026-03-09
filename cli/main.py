@@ -52,12 +52,26 @@ def cli():
 @click.command()
 @click.option('--source', '-s', default='0', help='Video source: camera index (0-9), video file path, or RTSP/HTTP URL')
 @click.option('--backend', '-b', type=click.Choice(['auto', 'v4l2', 'msmf', 'dshow', 'avfoundation', 'cv2']), default='auto', help='Video capture backend')
+@click.option('--output', '-o', type=click.Path(), help='Output video file path')
 @click.option('--save-faces', type=click.Path(), help='Directory to save detected face images')
 @click.option('--show-fps', is_flag=True, help='Show FPS counter')
 @click.option('--list-cameras', is_flag=True, help='List available cameras and exit')
 @click.option('--no-display', is_flag=True, help='Run without display (headless mode)')
 @click.option('--max-frames', type=int, help='Maximum frames to process (for testing)')
-def start(source, backend, save_faces, show_fps, list_cameras, no_display, max_frames):
+@click.option('--codec', type=click.Choice(['h264', 'h265', 'mp4v', 'xvid', 'avc1']), 
+              help='Video codec (default: h264)')
+@click.option('--container', type=click.Choice(['mp4', 'avi', 'mkv']), 
+              help='Container format (default: mp4)')
+@click.option('--quality', type=click.IntRange(0, 100), default=95,
+              help='Video quality (0-100, default: 95)')
+@click.option('--similarity-bars/--no-similarity-bars', default=True,
+              help='Show similarity bars above faces (default: on)')
+@click.option('--csv-log/--no-csv-log', default=True,
+              help='Enable CSV logging (default: on)')
+@click.option('--insightface-detection/--mtcnn-detection', default=False,
+              help='Use InsightFace for detection (more accurate but slower)')
+def start(source, backend, output, save_faces, show_fps, list_cameras, no_display, max_frames,
+          codec, container, quality, similarity_bars, csv_log, insightface_detection):
     """
     Start real-time face detection and recognition.
     
@@ -69,6 +83,13 @@ def start(source, backend, save_faces, show_fps, list_cameras, no_display, max_f
         save_faces: Directory to save detected face images
         show_fps: Whether to show FPS counter
         list_cameras: List available cameras
+        max_frames: Maximum frames to process
+        codec: Video codec
+        container: Container format
+        quality: Video quality
+        similarity_bars: Show similarity bars
+        csv_log: Enable CSV logging
+        insightface_detection: Use InsightFace for detection
     """
     
     # List cameras if requested
@@ -81,15 +102,32 @@ def start(source, backend, save_faces, show_fps, list_cameras, no_display, max_f
     click.echo("="*60)
     click.echo(f"Source: {source}")
     click.echo(f"Backend: {backend}")
+    if output:
+        click.echo(f"Output: {output}")
     if save_faces:
         click.echo(f"Save faces: {save_faces}")
+    click.echo(f"Codec: {codec or 'h264 (default)'}")
+    click.echo(f"Container: {container or 'mp4 (default)'}")
+    click.echo(f"Quality: {quality}")
+    click.echo(f"Similarity bars: {'on' if similarity_bars else 'off'}")
+    click.echo(f"CSV logging: {'on' if csv_log else 'off'}")
+    click.echo(f"Detection: {'InsightFace' if insightface_detection else 'MTCNN'}")
     if show_fps:
         click.echo(f"Show FPS counter: {show_fps}")
     click.echo("")
     
     try:
-        # Initialize pipeline
+        # Initialize pipeline with custom config
         config = Config()
+        if codec:
+            config.VIDEO_CODEC = codec
+        if container:
+            config.VIDEO_CONTAINER = container
+        config.VIDEO_QUALITY = quality
+        config.SHOW_SIMILARITY_BARS = similarity_bars
+        config.ENABLE_CSV_LOGGING = csv_log
+        config.USE_INSIGHTFACE_DETECTION = insightface_detection
+        
         pipeline = RecognitionPipeline(config=config)
         
         # Create video processor
@@ -105,8 +143,10 @@ def start(source, backend, save_faces, show_fps, list_cameras, no_display, max_f
             processor.process_camera(
                 camera_id=int(source_path),
                 display=display,
+                output_file=str(output) if output else None,
                 save_faces_dir=str(save_faces) if save_faces else None,
-                show_fps=show_fps
+                show_fps=show_fps,
+                max_frames=max_frames
             )
         elif source_type == 'video':
             click.echo(f"Processing video file: {source_path}")
@@ -372,10 +412,23 @@ def delete_face(face_id):
 
 @click.command()
 @click.option('--input', required=True, type=click.Path(), help='Input video file path')
-@click.option('--output', required=True, type=click.Path(), help='Output video file path')
+@click.option('--output', type=click.Path(), help='Output video file path (optional)')
 @click.option('--skip-frames', default=0, type=int, help='Number of frames to skip between processing')
 @click.option('--no-display', is_flag=True, help='Disable video display window')
-def process_video(input, output, skip_frames, no_display):
+@click.option('--codec', type=click.Choice(['h264', 'h265', 'mp4v', 'xvid', 'avc1']), 
+              help='Video codec (default: h264)')
+@click.option('--container', type=click.Choice(['mp4', 'avi', 'mkv']), 
+              help='Container format (default: mp4)')
+@click.option('--quality', type=click.IntRange(0, 100), default=95,
+              help='Video quality (0-100, default: 95)')
+@click.option('--similarity-bars/--no-similarity-bars', default=True,
+              help='Show similarity bars above faces (default: on)')
+@click.option('--csv-log/--no-csv-log', default=True,
+              help='Enable CSV logging (default: on)')
+@click.option('--insightface-detection/--mtcnn-detection', default=False,
+              help='Use InsightFace for detection (more accurate but slower)')
+def process_video(input, output, skip_frames, no_display, codec, container, quality,
+                 similarity_bars, csv_log, insightface_detection):
     """
     Process a video file for face recognition.
     
@@ -384,18 +437,39 @@ def process_video(input, output, skip_frames, no_display):
         output: Output video file path
         skip_frames: Number of frames to skip between processing
         no_display: Disable video display window
+        codec: Video codec
+        container: Container format
+        quality: Video quality
+        similarity_bars: Show similarity bars
+        csv_log: Enable CSV logging
+        insightface_detection: Use InsightFace for detection
     """
     click.echo("="*60)
     click.echo("🎬️️ PROCESS VIDEO FILE")
     click.echo("="*60)
     click.echo(f"Input: {input}")
-    click.echo(f"Output: {output}")
+    click.echo(f"Output: {output if output else 'None (display only)'}")
     click.echo(f"Skip frames: {skip_frames}")
+    click.echo(f"Codec: {codec or 'mp4v (default)'}")
+    click.echo(f"Container: {container or 'mp4 (default)'}")
+    click.echo(f"Quality: {quality}")
+    click.echo(f"Similarity bars: {'on' if similarity_bars else 'off'}")
+    click.echo(f"CSV logging: {'on' if csv_log else 'off'}")
+    click.echo(f"Detection: {'InsightFace' if insightface_detection else 'MTCNN'}")
     click.echo("")
     
     try:
-        # Initialize pipeline
+        # Initialize pipeline with custom config
         config = Config()
+        if codec:
+            config.VIDEO_CODEC = codec
+        if container:
+            config.VIDEO_CONTAINER = container
+        config.VIDEO_QUALITY = quality
+        config.SHOW_SIMILARITY_BARS = similarity_bars
+        config.ENABLE_CSV_LOGGING = csv_log
+        config.USE_INSIGHTFACE_DETECTION = insightface_detection
+        
         pipeline = RecognitionPipeline(config=config)
         
         # Create video processor
@@ -405,7 +479,7 @@ def process_video(input, output, skip_frames, no_display):
         with click.progressbar(length=100, label='Processing frames') as bar:
             stats = processor.process_video_file(
                 input_path=str(input),
-                output_path=str(output),
+                output_path=str(output) if output else None,
                 skip_frames=skip_frames,
                 display=not no_display,
                 callback=lambda frame, results: None

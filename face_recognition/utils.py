@@ -297,6 +297,131 @@ def resize_with_aspect_ratio(image: np.ndarray, width: Optional[int] = None,
     return cv2.resize(image, dim, interpolation=inter)
 
 
+def get_similarity_color(similarity: float) -> Tuple[int, int, int]:
+    """
+    Get color based on similarity score.
+    
+    Args:
+        similarity: Similarity score (0.0-1.0)
+        
+    Returns:
+        BGR color tuple
+    """
+    # Color gradient: Red (0.0) → Yellow (0.5) → Green (1.0)
+    if similarity < 0.5:
+        # Red to Yellow (0.0-0.5)
+        ratio = similarity / 0.5
+        r = 255
+        g = int(255 * ratio)
+        b = 0
+    else:
+        # Yellow to Green (0.5-1.0)
+        ratio = (similarity - 0.5) / 0.5
+        r = int(255 * (1 - ratio))
+        g = 255
+        b = 0
+    
+    return (b, g, r)  # BGR format for OpenCV
+
+def draw_similarity_bar(image: np.ndarray, bbox: List[int], 
+                       similarity: float, bar_height: int = 6) -> np.ndarray:
+    """
+    Draw horizontal similarity bar above bounding box.
+    
+    Args:
+        image: Input image
+        bbox: Bounding box [x, y, width, height]
+        similarity: Similarity score (0.0-1.0)
+        bar_height: Height of similarity bar in pixels
+        
+    Returns:
+        Image with similarity bar
+    """
+    output = image.copy()
+    x, y, w, h = bbox
+    
+    # Position bar 5 pixels above bounding box
+    bar_y = max(0, y - bar_height - 5)
+    
+    # Calculate bar width based on similarity
+    bar_width = int(w * similarity)
+    
+    # Get color based on similarity
+    color = get_similarity_color(similarity)
+    
+    # Draw bar background (gray)
+    cv2.rectangle(output, (x, bar_y), (x + w, bar_y + bar_height), (100, 100, 100), -1)
+    
+    # Draw filled portion based on similarity
+    if bar_width > 0:
+        cv2.rectangle(output, (x, bar_y), (x + bar_width, bar_y + bar_height), color, -1)
+    
+    # Draw border
+    cv2.rectangle(output, (x, bar_y), (x + w, bar_y + bar_height), (50, 50, 50), 1)
+    
+    return output
+
+def draw_metrics_overlay(image: np.ndarray, metrics: Dict) -> np.ndarray:
+    """
+    Draw metrics overlay on frame.
+    
+    Args:
+        image: Input image
+        metrics: Dictionary with fps, face_count, etc.
+        
+    Returns:
+        Image with metrics overlay
+    """
+    output = image.copy()
+    
+    # Position: Top-left corner
+    y_offset = 30
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.7
+    thickness = 2
+    color = (0, 255, 0)  # Green
+    
+    # Build metrics text
+    fps = metrics.get('fps', 0)
+    face_count = metrics.get('face_count', 0)
+    known_count = metrics.get('known_count', 0)
+    
+    metrics_text = f"FPS: {fps:.1f} | Faces: {face_count}"
+    if known_count > 0:
+        metrics_text += f" | Known: {known_count}"
+    
+    # Draw background for text
+    (text_width, text_height), baseline = cv2.getTextSize(
+        metrics_text, font, font_scale, thickness
+    )
+    
+    # Draw semi-transparent background
+    overlay = output.copy()
+    cv2.rectangle(
+        overlay,
+        (10, 10),
+        (10 + text_width + 10, 10 + text_height + baseline + 10),
+        (0, 0, 0),
+        -1
+    )
+    
+    # Blend with original image
+    alpha = 0.7
+    cv2.addWeighted(overlay, alpha, output, 1 - alpha, 0, output)
+    
+    # Draw text
+    cv2.putText(
+        output,
+        metrics_text,
+        (15, 15 + text_height),
+        font,
+        font_scale,
+        color,
+        thickness
+    )
+    
+    return output
+
 def save_image(image: np.ndarray, path: str, quality: int = 95) -> bool:
     """
     Save image to file.

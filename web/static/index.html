@@ -91,7 +91,11 @@
                     <div class="view-header">
                         <h2>Face Gallery</h2>
                         <div class="view-actions">
-                            <input type="text" id="searchFaces" class="search-input" placeholder="Search faces...">
+                            <input type="text" id="searchFaces" class="search-input" placeholder="Search by name or ID...">
+                            <label class="btn btn-secondary" for="searchImageInput">
+                                🔍 Image Search
+                            </label>
+                            <input type="file" id="searchImageInput" accept="image/*" style="display:none" onchange="handleSearchImageUpload(this)">
                             <button class="btn btn-primary" onclick="refreshFaces()">Refresh</button>
                         </div>
                     </div>
@@ -116,7 +120,7 @@
                                 <input type="file" id="faceImage" name="image" accept="image/*" required>
                                 <div class="upload-placeholder">
                                     <span class="upload-icon">📷</span>
-                                    <span>Click or drag image here</span>
+                                    <span>Click to load image</span>
                                     <span class="upload-hint">Supports JPG, PNG, BMP</span>
                                 </div>
                                 <img id="previewImage" class="preview-image" alt="Preview">
@@ -198,6 +202,13 @@
                             <span class="stat-label">Recognized:</span>
                             <span id="facesRecognized" class="stat-value">0</span>
                         </div>
+                    </div>
+                    
+                    <div class="recognized-faces">
+                        <h3>Recognized Faces</h3>
+                        <ul id="recognizedFacesList" class="recognized-list">
+                            <li class="text-gray-500">No faces recognized yet</li>
+                        </ul>
                     </div>
                 </section>
 

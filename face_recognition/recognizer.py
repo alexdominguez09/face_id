@@ -55,26 +55,38 @@ class FaceRecognizer:
         try:
             logger.info(f"Loading InsightFace model: {self.model_name}")
             
-            # Set context (GPU or CPU) - default to CPU if GPU fails
-            ctx_id = self.gpu_device if self.use_gpu else -1
+            # Try GPU first if requested
+            if self.use_gpu:
+                try:
+                    # Initialize with GPU provider first
+                    self._model = FaceAnalysis(
+                        name=self.model_name,
+                        providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
+                    )
+                    self._model.prepare(ctx_id=self.gpu_device, det_size=(640, 640))
+                    logger.info(f"InsightFace model loaded successfully (GPU: True)")
+                    self._initialized = True
+                    return
+                except Exception as gpu_err:
+                    logger.warning(f"GPU loading failed ({gpu_err}), falling back to CPU")
+                    # Clear model and try CPU
+                    self._model = None
             
-            # Initialize FaceAnalysis
-            self._model = FaceAnalysis(
-                name=self.model_name,
-                providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
-            )
-            
-            # Prepare model - try GPU first, fallback to CPU
+            # Fallback to CPU
             try:
-                self._model.prepare(ctx_id=ctx_id, det_size=(640, 640))
-            except Exception as gpu_err:
-                # Fallback to CPU if GPU fails
-                logger.warning(f"GPU loading failed ({gpu_err}), falling back to CPU")
+                # Initialize with CPU provider only
+                self._model = FaceAnalysis(
+                    name=self.model_name,
+                    providers=['CPUExecutionProvider']  # CPU only
+                )
                 self._model.prepare(ctx_id=-1, det_size=(640, 640))
                 self.use_gpu = False
-            
-            self._initialized = True
-            logger.info(f"InsightFace model loaded successfully (GPU: {self.use_gpu})")
+                self._initialized = True
+                logger.info(f"InsightFace model loaded successfully (GPU: False)")
+            except Exception as cpu_err:
+                logger.error(f"CPU loading also failed: {cpu_err}")
+                self._model = None
+                raise RuntimeError(f"Failed to load InsightFace model on both GPU and CPU: {cpu_err}")
             
         except Exception as e:
             logger.error(f"Failed to load InsightFace model: {e}")
@@ -85,7 +97,7 @@ class FaceRecognizer:
         Generate face embedding.
         
         Args:
-            face_image: Aligned face image (112x112 RGB)
+            face_image: Face image (can be whole image or pre-cropped/aligned face)
             
         Returns:
             Face embedding vector (512-dimensional), or None if encoding fails
@@ -100,10 +112,53 @@ class FaceRecognizer:
                     face_image = cv2.cvtColor(face_image, cv2.COLOR_RGBA2RGB)
                 elif face_image.shape[2] == 3:
                     # Check if BGR (OpenCV default)
-                    # Assume it's already RGB if coming from detector
-                    pass
+                    # Simple heuristic: if blue channel > red channel, it's likely BGR
+                    if face_image.shape[0] > 10 and face_image.shape[1] > 10:
+                        center_h, center_w = face_image.shape[0] // 2, face_image.shape[1] // 2
+                        crop_size = min(face_image.shape[:2]) // 4
+                        y1 = max(0, center_h - crop_size)
+                        y2 = min(face_image.shape[0], center_h + crop_size)
+                        x1 = max(0, center_w - crop_size)
+                        x2 = min(face_image.shape[1], center_w + crop_size)
+                        
+                        if y2 > y1 and x2 > x1:
+                            center_region = face_image[y1:y2, x1:x2]
+                            avg_color = center_region.mean(axis=(0, 1))
+                            
+                            # In BGR: skin has B < R (blue < red)
+                            # In RGB: skin has R > B (red > blue)
+                            if avg_color[0] > avg_color[2]:  # B > R in BGR
+                                # Likely BGR format, convert to RGB
+                                face_image = cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB)
+                                logger.debug("Detected BGR image, converting to RGB")
             
-            # Get face embedding using InsightFace
+            # Try to get face embedding using InsightFace
+            # For whole images, use get() which detects faces first
+            # For pre-cropped faces, we need to handle them differently
+            
+            # Check if this looks like a pre-cropped face (112x112 is standard size)
+            is_precropped = (face_image.shape[0] == 112 and face_image.shape[1] == 112)
+            
+            if is_precropped:
+                # For pre-cropped faces, use the recognition model directly
+                logger.debug("Encoding pre-cropped face (112x112)")
+                
+                # Get the recognition model from FaceAnalysis
+                if hasattr(self._model, 'models') and 'recognition' in self._model.models:
+                    rec_model = self._model.models['recognition']
+                    
+                    # get_feat expects image(s) as input, not pre-processed tensors
+                    # It will handle normalization and resizing internally
+                    embedding = rec_model.get_feat(face_image)
+                    
+                    # Normalize embedding
+                    embedding = embedding / np.linalg.norm(embedding)
+                    
+                    return embedding
+                else:
+                    logger.warning("Recognition model not found, falling back to get()")
+            
+            # Fallback: use get() which works for whole images
             faces = self._model.get(face_image)
             
             if len(faces) == 0:
@@ -233,6 +288,23 @@ class FaceRecognizer:
     def get_embedding_dimension(self) -> int:
         """Get the dimension of face embeddings."""
         return self.embedding_dim
+    
+    def cleanup(self) -> None:
+        """Clean up model and release GPU memory."""
+        if self._model is not None:
+            try:
+                # InsightFace models don't have explicit cleanup, but we can delete the reference
+                # to allow garbage collection
+                del self._model
+                self._model = None
+                self._initialized = False
+                logger.info("FaceRecognizer model cleaned up")
+            except Exception as e:
+                logger.warning(f"Error cleaning up model: {e}")
+    
+    def __del__(self) -> None:
+        """Destructor to ensure cleanup."""
+        self.cleanup()
     
     def __repr__(self) -> str:
         return (f"FaceRecognizer(model_name='{self.model_name}', "

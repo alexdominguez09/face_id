@@ -11,6 +11,12 @@ let videoProcessing = false;
 let detectionInterval = null;
 let faceToDelete = null;
 
+// Video processing metrics
+let totalFacesDetected = 0;
+let totalFacesRecognized = 0;
+let recognizedFacesMap = new Map(); // name -> count
+let videoStartTime = 0;
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
@@ -144,38 +150,28 @@ function formatTime(timestamp) {
 }
 
 // Faces
-async function loadFaces() {
+let currentPage = 1;
+let totalPages = 1;
+
+async function loadFaces(page = 1) {
     const grid = document.getElementById('facesGrid');
     grid.innerHTML = '<p class="empty-state">Loading faces...</p>';
     
     try {
-        const response = await fetch(`${API_BASE}/faces`);
+        const response = await fetch(`${API_BASE}/faces?page=${page}&limit=20`);
         const data = await response.json();
         
         faces = data.faces || [];
+        currentPage = data.pagination?.page || 1;
+        totalPages = data.pagination?.total_pages || 1;
         
         if (faces.length === 0) {
             grid.innerHTML = '<p class="empty-state">No faces enrolled yet. Go to Enroll Face to add one.</p>';
             return;
         }
         
-        grid.innerHTML = faces.map(face => `
-            <div class="face-card" data-face-id="${face.id}">
-                <div class="face-image">
-                    ${face.image_path ? `<img src="/api/faces/image/${face.id}" alt="${face.name}" onerror="this.parentElement.innerHTML='👤'">` : '👤'}
-                </div>
-                <div class="face-info">
-                    <div class="face-name">${escapeHtml(face.name)}</div>
-                    <div class="face-meta">
-                        ID: ${face.id} • Seen ${face.seen_count || 0} times
-                    </div>
-                </div>
-                <div class="face-actions">
-                    <button class="btn btn-secondary btn-small" onclick="viewFace(${face.id})">View</button>
-                    <button class="btn btn-danger btn-small" onclick="confirmDeleteFace(${face.id}, '${escapeHtml(face.name)}')">Delete</button>
-                </div>
-            </div>
-        `).join('');
+        renderFacesList(faces);
+        renderPaginationControls();
         
     } catch (error) {
         console.error('Failed to load faces:', error);
@@ -183,45 +179,222 @@ async function loadFaces() {
     }
 }
 
-function refreshFaces() {
-    loadFaces();
-}
-
-// Search faces
-document.getElementById('searchFaces')?.addEventListener('input', (e) => {
-    const query = e.target.value.toLowerCase();
+function renderFacesList(facesList) {
     const grid = document.getElementById('facesGrid');
     
-    const filtered = faces.filter(face => 
-        face.name.toLowerCase().includes(query)
-    );
-    
-    if (filtered.length === 0) {
+    if (facesList.length === 0) {
         grid.innerHTML = '<p class="empty-state">No matching faces found</p>';
         return;
     }
     
-    grid.innerHTML = filtered.map(face => `
-        <div class="face-card" data-face-id="${face.id}">
-            <div class="face-image">
-                ${face.image_path ? `<img src="/api/faces/image/${face.id}" alt="${face.name}" onerror="this.parentElement.innerHTML='👤'">` : '👤'}
-            </div>
-            <div class="face-info">
-                <div class="face-name">${escapeHtml(face.name)}</div>
-                <div class="face-meta">
-                    ID: ${face.id} • Seen ${face.seen_count || 0} times
-                </div>
-            </div>
-            <div class="face-actions">
-                <button class="btn btn-secondary btn-small" onclick="viewFace(${face.id})">View</button>
-                <button class="btn btn-danger btn-small" onclick="confirmDeleteFace(${face.id}, '${escapeHtml(face.name)}')">Delete</button>
-            </div>
+    grid.innerHTML = `
+        <table class="faces-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Image</th>
+                    <th>Name</th>
+                    <th>Created</th>
+                    <th>Seen</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${facesList.map(face => `
+                    <tr>
+                        <td>${face.id}</td>
+                        <td>
+                            ${face.has_image ? 
+                                `<img src="/api/faces/image/${face.id}" alt="${face.name}" class="face-thumb" onerror="this.style.display='none'">` : 
+                                '<span class="no-image">👤</span>'}
+                        </td>
+                        <td>${escapeHtml(face.name)}</td>
+                        <td>${face.created_at ? face.created_at.substring(0, 16) : '-'}</td>
+                        <td>${face.seen_count || 0}</td>
+                        <td>
+                            <button class="btn btn-secondary btn-small" onclick="viewFace(${face.id})">View</button>
+                            <button class="btn btn-danger btn-small" onclick="confirmDeleteFace(${face.id}, '${escapeHtml(face.name)}')">Delete</button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function renderPaginationControls() {
+    const grid = document.getElementById('facesGrid');
+    const paginationContainer = document.createElement('div');
+    paginationContainer.className = 'pagination-controls';
+    
+    const startFace = (currentPage - 1) * 20 + 1;
+    const endFace = Math.min(currentPage * 20, startFace + faces.length - 1);
+    
+    paginationContainer.innerHTML = `
+        <div class="pagination-info">
+            Showing faces ${startFace} to ${endFace}
         </div>
-    `).join('');
+        <div class="pagination-buttons">
+            <button class="btn btn-secondary btn-small" onclick="goToPage(1)" ${currentPage === 1 ? 'disabled' : ''}>
+                First
+            </button>
+            <button class="btn btn-secondary btn-small" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+                Previous
+            </button>
+            <span class="page-indicator">Page ${currentPage} of ${totalPages}</span>
+            <button class="btn btn-secondary btn-small" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+                Next
+            </button>
+            <button class="btn btn-secondary btn-small" onclick="goToPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>
+                Last
+            </button>
+        </div>
+    `;
+    
+    grid.appendChild(paginationContainer);
+}
+
+function goToPage(page) {
+    if (page >= 1 && page <= totalPages && page !== currentPage) {
+        loadFaces(page);
+    }
+}
+
+function refreshFaces() {
+    // Clear search input
+    const searchInput = document.getElementById('searchFaces');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    loadFaces(1);
+}
+
+// Search faces
+document.getElementById('searchFaces')?.addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase().trim();
+    const grid = document.getElementById('facesGrid');
+    
+    if (!query) {
+        renderFacesList(faces);
+        renderPaginationControls();
+        return;
+    }
+    
+    // Check if query is a number (ID search)
+    const queryNum = parseInt(query);
+    const isIdSearch = !isNaN(queryNum);
+    
+    const filtered = faces.filter(face => {
+        if (isIdSearch) {
+            return face.id === queryNum;
+        }
+        return face.name.toLowerCase().includes(query);
+    });
+    
+    renderFacesList(filtered);
+    // Hide pagination when searching within current page
+    const paginationEl = grid.querySelector('.pagination-controls');
+    if (paginationEl) {
+        paginationEl.style.display = 'none';
+    }
 });
 
+// Add search by image functionality
+async function searchByImage(imageData) {
+    const grid = document.getElementById('facesGrid');
+    grid.innerHTML = '<p class="empty-state">Searching...</p>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/faces/search?threshold=0.5&limit=3`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: imageData })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Search failed');
+        }
+        
+        const result = await response.json();
+        
+        if (result.matches && result.matches.length > 0) {
+            grid.innerHTML = `
+                <div class="search-results">
+                    <h3>Top ${result.total_matches} Matches</h3>
+                    <table class="faces-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Image</th>
+                                <th>Name</th>
+                                <th>Similarity</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${result.matches.map(face => `
+                                <tr>
+                                    <td>${face.id}</td>
+                                    <td>${face.has_image ? 
+                                        `<img src="/api/faces/image/${face.id}" alt="${face.name}" class="face-thumb">` : 
+                                        '<span class="no-image">👤</span>'}</td>
+                                    <td>${escapeHtml(face.name)}</td>
+                                    <td><span class="similarity-badge">${(face.similarity * 100).toFixed(1)}%</span></td>
+                                    <td>
+                                        <button class="btn btn-secondary btn-small" onclick="viewFace(${face.id})">View</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            grid.innerHTML = '<p class="empty-state">No matching faces found</p>';
+        }
+        
+    } catch (error) {
+        console.error('Search failed:', error);
+        grid.innerHTML = `<p class="empty-state">Search failed: ${escapeHtml(error.message)}</p>`;
+    }
+}
+
 function viewFace(faceId) {
-    window.location.href = `/api/faces/${faceId}`;
+    // Show loading first
+    showModal('Face Details', '<p class="empty-state">Loading...</p>');
+    
+    // Fetch face details from API
+    fetch(`${API_BASE}/faces/${faceId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Face not found');
+            return response.json();
+        })
+        .then(face => {
+            const modalContent = `
+                <div class="face-view-modal">
+                    <div class="face-view-image">
+                        ${face.has_image ? 
+                            `<img src="/api/faces/image/${face.id}" alt="${face.name}">` : 
+                            '<div class="no-image-large">👤</div>'}
+                    </div>
+                    <div class="face-view-details">
+                        <h2>${escapeHtml(face.name)}</h2>
+                        <table class="detail-table">
+                            <tr><td><strong>ID:</strong></td><td>${face.id}</td></tr>
+                            <tr><td><strong>Created:</strong></td><td>${face.created_at || '-'}</td></tr>
+                            <tr><td><strong>Last Seen:</strong></td><td>${face.last_seen_at || 'Never'}</td></tr>
+                            <tr><td><strong>Times Seen:</strong></td><td>${face.seen_count || 0}</td></tr>
+                        </table>
+                        <button class="btn btn-danger" onclick="confirmDeleteFace(${face.id}, '${escapeHtml(face.name)}'); closeModal();">Delete Face</button>
+                    </div>
+                </div>
+            `;
+            showModal('Face Details', modalContent);
+        })
+        .catch(error => {
+            showModal('Error', `<p class="empty-state">${escapeHtml(error.message)}</p>`);
+        });
 }
 
 // Enroll Form
@@ -231,23 +404,44 @@ function initForms() {
         enrollForm.addEventListener('submit', handleEnrollSubmit);
     }
     
-    // Image upload preview
+    // Image upload preview (no drag-and-drop, just file selection)
     const imageUpload = document.getElementById('faceImage');
     const uploadArea = document.getElementById('imageUploadArea');
     const previewImage = document.getElementById('previewImage');
     
     if (imageUpload && uploadArea) {
+        // Click to select file
         imageUpload.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    previewImage.src = e.target.result;
-                    uploadArea.classList.add('has-image');
-                };
-                reader.readAsDataURL(file);
+                handleImageFile(file, previewImage, uploadArea);
             }
         });
+        
+        // Click on upload area to trigger file input
+        uploadArea.addEventListener('click', (e) => {
+            if (e.target !== imageUpload) {
+                imageUpload.click();
+            }
+        });
+    }
+    
+    // Helper function to handle image file
+    function handleImageFile(file, previewImage, uploadArea) {
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file (JPG, PNG, BMP)');
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            previewImage.src = e.target.result;
+            uploadArea.classList.add('has-image');
+        };
+        reader.onerror = () => {
+            alert('Error reading image file');
+        };
+        reader.readAsDataURL(file);
     }
     
     // Video source toggle
@@ -412,19 +606,95 @@ async function startVideo() {
     
     try {
         if (source === 'camera') {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: 640, height: 480 } 
-            });
-            videoElement.srcObject = stream;
-            videoStream = stream;
+            // Check if browser supports mediaDevices
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                statusEl.textContent = 'Camera access not supported by browser';
+                alert('Your browser does not support camera access. Try Chrome or Firefox with HTTPS.');
+                return;
+            }
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 15, max: 30 } // Limit frame rate
+                    } 
+                });
+                videoElement.srcObject = stream;
+                videoStream = stream;
+                
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = resolve;
+                });
+            } catch (cameraError) {
+                console.error('Camera access failed:', cameraError);
+                
+                // Provide user-friendly error messages
+                let errorMessage = 'Camera error: ';
+                if (cameraError.name === 'NotAllowedError') {
+                    errorMessage += 'Camera access denied. Please allow camera permissions.';
+                } else if (cameraError.name === 'NotFoundError') {
+                    errorMessage += 'No camera found. Please connect a camera.';
+                } else if (cameraError.name === 'NotReadableError') {
+                    errorMessage += 'Camera is already in use by another application.';
+                } else {
+                    errorMessage += cameraError.message;
+                }
+                
+                statusEl.textContent = errorMessage;
+                alert(errorMessage);
+                return;
+            }
         } else {
             const videoFile = document.getElementById('videoFile').files[0];
             if (!videoFile) {
                 alert('Please select a video file');
                 return;
             }
-            videoElement.src = URL.createObjectURL(videoFile);
-            await videoElement.play();
+            
+            // Create object URL and set source
+            const objectUrl = URL.createObjectURL(videoFile);
+            videoElement.src = objectUrl;
+            
+            // Clean up object URL when video ends or on error
+            videoElement.onended = () => URL.revokeObjectURL(objectUrl);
+            videoElement.onerror = () => URL.revokeObjectURL(objectUrl);
+            
+            // Try to play with error handling
+            try {
+                await videoElement.play();
+            } catch (playError) {
+                console.warn('Video play failed, trying again:', playError);
+                
+                // Common error: "play() request was interrupted"
+                // Wait a bit and try again
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                try {
+                    await videoElement.play();
+                } catch (retryError) {
+                    console.error('Video play retry failed:', retryError);
+                    statusEl.textContent = 'Failed to play video: ' + retryError.message;
+                    
+                    // Clean up and return
+                    URL.revokeObjectURL(objectUrl);
+                    return;
+                }
+            }
+        }
+        
+        // Reset metrics
+        totalFacesDetected = 0;
+        totalFacesRecognized = 0;
+        recognizedFacesMap.clear();
+        videoStartTime = Date.now();
+        
+        // Clear recognized faces list
+        const recognizedList = document.getElementById('recognizedFacesList');
+        if (recognizedList) {
+            recognizedList.innerHTML = '<li class="text-gray-500">No faces recognized yet</li>';
         }
         
         videoProcessing = true;
@@ -447,17 +717,46 @@ function stopVideo() {
     const stopBtn = document.getElementById('stopVideoBtn');
     const statusEl = document.getElementById('videoStatus');
     
+    // Stop camera stream if active
     if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
+        videoStream.getTracks().forEach(track => {
+            track.stop();
+            track.enabled = false;
+        });
         videoStream = null;
     }
     
+    // Pause video and clean up
+    videoElement.pause();
+    videoElement.currentTime = 0;
+    
+    // Clean up object URL if used
+    if (videoElement.src && videoElement.src.startsWith('blob:')) {
+        URL.revokeObjectURL(videoElement.src);
+    }
+    
     videoElement.srcObject = null;
+    videoElement.src = '';
     videoProcessing = false;
+    
+    // Reset processing state and metrics
+    isProcessingFrame = false;
+    frameQueue = [];
+    lastFrameTime = 0;
+    minFrameInterval = MIN_FRAME_INTERVAL_MIN;
+    totalFacesDetected = 0;
+    totalFacesRecognized = 0;
+    recognizedFacesMap.clear();
+    videoStartTime = 0;
     
     startBtn.disabled = false;
     stopBtn.disabled = true;
     statusEl.textContent = 'Stopped';
+    
+    // Clear canvas
+    const canvas = document.getElementById('overlayCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     // Reset stats
     document.getElementById('videoFps').textContent = '0';
@@ -465,32 +764,77 @@ function stopVideo() {
     document.getElementById('facesRecognized').textContent = '0';
 }
 
+// Track processing state to prevent overlapping requests
+let isProcessingFrame = false;
+let frameQueue = [];
+let lastFrameTime = 0;
+let minFrameInterval = 200; // Process at most 5 FPS (1000ms / 5 = 200ms)
+const MIN_FRAME_INTERVAL_MIN = 200;
+const MIN_FRAME_INTERVAL_MAX = 1000;
+
 async function processVideoFrame() {
     if (!videoProcessing) return;
+    
+    const now = Date.now();
+    const timeSinceLastFrame = now - lastFrameTime;
+    
+    // Skip if we're processing too fast or already processing a frame
+    if (isProcessingFrame || timeSinceLastFrame < minFrameInterval) {
+        // Schedule next check
+        setTimeout(processVideoFrame, 50);
+        return;
+    }
+    
+    isProcessingFrame = true;
+    lastFrameTime = now;
     
     const videoElement = document.getElementById('videoElement');
     const canvas = document.getElementById('overlayCanvas');
     const ctx = canvas.getContext('2d');
     const statusEl = document.getElementById('videoStatus');
     
-    if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
-        canvas.width = videoElement.videoWidth;
-        canvas.height = videoElement.videoHeight;
-        ctx.drawImage(videoElement, 0, 0);
+    // Clear canvas before drawing
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA && 
+        videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+        
+        // Set canvas size to match video
+        if (canvas.width !== videoElement.videoWidth || canvas.height !== videoElement.videoHeight) {
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+        }
+        
+        // Draw current video frame
+        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
         
         const enableRecognition = document.getElementById('enableRecognition').checked;
         
         try {
+            // Capture frame from canvas as base64 with lower quality for faster transfer
+            const imageData = canvas.toDataURL('image/jpeg', 0.5);
+            
+            // Add timeout to prevent hanging requests
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
             const response = await fetch(`${API_BASE}/video/detect`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    frame: videoElement.src,
+                    frame: imageData,
                     recognize: enableRecognition
-                })
+                }),
+                signal: controller.signal
             });
             
+            clearTimeout(timeoutId);
+            
             const data = await response.json();
+            
+            // Clear canvas and redraw video frame with overlays
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
             
             if (data.faces && data.faces.length > 0) {
                 // Draw face boxes
@@ -502,28 +846,84 @@ async function processVideoFrame() {
                     
                     // Draw label
                     ctx.fillStyle = face.name ? '#10b981' : '#ef4444';
-                    ctx.fillRect(box.x, box.y - 25, box.width, 25);
+                    ctx.fillRect(box.x, box.y - 25, Math.max(box.width, 80), 25);
                     ctx.fillStyle = 'white';
                     ctx.font = '14px sans-serif';
-                    ctx.fillText(face.name || 'Unknown', box.x + 5, box.y - 7);
+                    const label = face.name || 'Unknown';
+                    ctx.fillText(label, box.x + 5, box.y - 7);
+                    
+                    // Update accumulated metrics
+                    totalFacesDetected++;
+                    if (face.name) {
+                        totalFacesRecognized++;
+                        // Track recognized faces by name
+                        recognizedFacesMap.set(face.name, (recognizedFacesMap.get(face.name) || 0) + 1);
+                    }
                 });
                 
-                document.getElementById('facesDetected').textContent = data.faces.length;
-                document.getElementById('facesRecognized').textContent = data.faces.filter(f => f.name).length;
-            } else {
-                document.getElementById('facesDetected').textContent = '0';
+                // Update UI with accumulated totals
+                document.getElementById('facesDetected').textContent = totalFacesDetected;
+                document.getElementById('facesRecognized').textContent = totalFacesRecognized;
+                
+                // Update recognized faces list
+                updateRecognizedFacesList();
             }
             
+            // Show current FPS (not accumulated)
             document.getElementById('videoFps').textContent = data.fps || '0';
-            statusEl.textContent = 'Processing...';
+            
+            // Calculate and show elapsed time
+            const elapsedSeconds = Math.floor((Date.now() - videoStartTime) / 1000);
+            const minutes = Math.floor(elapsedSeconds / 60);
+            const seconds = elapsedSeconds % 60;
+            statusEl.textContent = `Processing ${data.fps || '0'} FPS | Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
             
         } catch (error) {
-            console.error('Frame processing error:', error);
+            if (error.name === 'AbortError') {
+                console.warn('Frame processing timeout');
+                statusEl.textContent = 'Processing timeout - slowing down';
+                // Increase interval on timeout (with bounds)
+                minFrameInterval = Math.min(minFrameInterval * 1.5, MIN_FRAME_INTERVAL_MAX);
+            } else {
+                console.error('Frame processing error:', error);
+                statusEl.textContent = 'Error processing frame';
+            }
+            
+            // Clear stats on error
+            document.getElementById('facesDetected').textContent = '0';
+            document.getElementById('facesRecognized').textContent = '0';
         }
+    } else {
+        statusEl.textContent = 'Waiting for video data...';
     }
     
-    // Continue loop
-    setTimeout(processVideoFrame, 100);
+    isProcessingFrame = false;
+    
+    // Continue loop with adaptive timing
+    const nextDelay = Math.max(50, minFrameInterval - (Date.now() - now));
+    setTimeout(processVideoFrame, nextDelay);
+}
+
+function updateRecognizedFacesList() {
+    const recognizedList = document.getElementById('recognizedFacesList');
+    if (!recognizedList) return;
+    
+    if (recognizedFacesMap.size === 0) {
+        recognizedList.innerHTML = '<li class="text-gray-500">No faces recognized yet</li>';
+        return;
+    }
+    
+    // Sort by count (descending)
+    const sortedFaces = Array.from(recognizedFacesMap.entries())
+        .sort((a, b) => b[1] - a[1]);
+    
+    // Update list
+    recognizedList.innerHTML = sortedFaces.map(([name, count]) => 
+        `<li class="flex justify-between items-center py-1">
+            <span class="font-medium">${name}</span>
+            <span class="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded">${count}×</span>
+         </li>`
+    ).join('');
 }
 
 // Settings
@@ -606,6 +1006,53 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Modal functions
+function showModal(title, content) {
+    // Remove existing modal if any
+    const existing = document.getElementById('customModal');
+    if (existing) existing.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'customModal';
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h2>${title}</h2>
+            ${content}
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    // Close on outside click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+}
+
+function closeModal() {
+    const modal = document.getElementById('customModal');
+    if (modal) modal.remove();
+}
+
+// Handle image search upload
+function handleSearchImageUpload(input) {
+    if (!input.files || !input.files[0]) return;
+    
+    const file = input.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        // Convert to base64
+        const imageData = e.target.result.split(',')[1]; // Remove data URL prefix
+        searchByImage(imageData);
+    };
+    
+    reader.readAsDataURL(file);
+    // Reset input so same file can be selected again
+    input.value = '';
 }
 
 // Close modal on outside click

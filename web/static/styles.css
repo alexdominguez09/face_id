@@ -339,9 +339,12 @@ body {
 
 /* Faces Grid */
 .faces-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 1.5rem;
+    display: block;
+}
+
+/* Override any grid styling for tables */
+.faces-grid table {
+    display: table;
 }
 
 .face-card {
@@ -653,6 +656,36 @@ body {
     font-weight: 600;
 }
 
+.recognized-faces {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: var(--surface-color);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.recognized-faces h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+}
+
+.recognized-list {
+    list-style: none;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.recognized-list li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.recognized-list li:last-child {
+    border-bottom: none;
+}
+
 /* Settings */
 .settings-section {
     background-color: var(--surface-color);
@@ -844,4 +877,174 @@ body {
     .faces-grid {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     }
+}
+
+/* Faces Table */
+.faces-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.faces-table th,
+.faces-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.faces-table th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+}
+
+.faces-table tr:hover {
+    background: var(--bg-secondary);
+}
+
+.faces-table tr:last-child td {
+    border-bottom: none;
+}
+
+.face-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border-color);
+}
+
+.no-image {
+    font-size: 1.5rem;
+    display: inline-block;
+}
+
+.similarity-badge {
+    background: var(--primary-color);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* Face View Modal */
+.face-view-modal {
+    display: flex;
+    gap: 2rem;
+    padding: 1rem;
+}
+
+.face-view-image {
+    flex-shrink: 0;
+}
+
+.face-view-image img {
+    width: 200px;
+    height: 200px;
+    object-fit: cover;
+    border-radius: var(--radius-lg);
+    border: 3px solid var(--border-color);
+}
+
+.no-image-large {
+    width: 200px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+}
+
+.face-view-details h2 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+
+.detail-table {
+    margin-bottom: 1.5rem;
+}
+
+.detail-table td {
+    padding: 0.5rem 0;
+}
+
+.detail-table td:first-child {
+    padding-right: 1rem;
+    color: var(--text-secondary);
+}
+
+/* Custom Modal */
+#customModal .modal-content {
+    max-width: 500px;
+    padding: 2rem;
+}
+
+.close-modal {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+.close-modal:hover {
+    color: var(--text-primary);
+}
+
+/* Search Results */
+.search-results h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+
+/* Pagination Controls */
+.pagination-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+    padding: 1rem;
+    background: var(--surface-color);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.pagination-info {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.pagination-buttons {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.page-indicator {
+    padding: 0.5rem 1rem;
+    background: var(--bg-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.pagination-buttons .btn-small {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.pagination-buttons .btn-small:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }

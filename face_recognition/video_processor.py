@@ -6,12 +6,13 @@ Handles video stream processing from cameras and video files.
 import cv2
 import numpy as np
 from typing import Optional, Callable, Dict, Any, Union
+from pathlib import Path
 import logging
 import time
-from pathlib import Path
 
 from .pipeline import RecognitionPipeline
 from .config import Config
+from .video_utils import create_video_writer, get_file_extension_for_container
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +145,12 @@ class VideoProcessor:
                     break
                 
                 # Process frame
-                results = self.pipeline.process_frame(frame)
+                results = self.pipeline.process_frame(
+                    frame,
+                    source='webcam',
+                    source_path=None,
+                    metadata={'camera_id': camera_id}
+                )
                 
                 # Visualize results
                 output_frame = self.pipeline.visualize_results(frame, results)
@@ -252,7 +258,16 @@ class VideoProcessor:
                     continue
                 
                 # Process frame
-                results = self.pipeline.process_frame(frame)
+                results = self.pipeline.process_frame(
+                    frame,
+                    source='video_file',
+                    source_path=str(input_path),
+                    metadata={
+                        'video_path': str(input_path),
+                        'frame_count': frame_count,
+                        'skip_frames': skip_frames
+                    }
+                )
                 
                 # Get face detections - pipeline returns 'detections' and 'tracks'
                 detections = results.get('detections', [])
@@ -321,7 +336,10 @@ class VideoProcessor:
         
         return stats
     
-    def _init_writer(self, output_path: str, width: int, height: int, fps: int) -> None:
+    def _init_writer(self, output_path: str, width: int, height: int, fps: int,
+                    codec: Optional[str] = None,
+                    container: Optional[str] = None,
+                    quality: Optional[int] = None) -> None:
         """
         Initialize video writer.
         
@@ -330,20 +348,37 @@ class VideoProcessor:
             width: Frame width
             height: Frame height
             fps: Frames per second
+            codec: Video codec (uses config if None)
+            container: Container format (uses config if None)
+            quality: Video quality (uses config if None)
         """
-        # Create output directory if needed
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        # Use config values if not specified
+        if codec is None:
+            codec = self.config.VIDEO_CODEC
+        if container is None:
+            container = self.config.VIDEO_CONTAINER
+        if quality is None:
+            quality = self.config.VIDEO_QUALITY
         
-        # Define codec
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        # Ensure output path has correct extension
+        output_path = Path(output_path)
+        expected_extension = get_file_extension_for_container(container)
         
-        # Create writer
-        self.writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        if output_path.suffix.lower() != expected_extension:
+            logger.warning(f"Output path has extension {output_path.suffix}, "
+                          f"expected {expected_extension} for {container} container")
+            output_path = output_path.with_suffix(expected_extension)
         
-        if not self.writer.isOpened():
-            raise RuntimeError(f"Failed to create video writer: {output_path}")
-        
-        logger.info(f"Video writer initialized: {output_path}")
+        # Create video writer
+        self.writer = create_video_writer(
+            output_path=str(output_path),
+            width=width,
+            height=height,
+            fps=fps,
+            codec=codec,
+            container=container,
+            quality=quality
+        )
     
     def stop(self) -> None:
         """Stop processing."""
